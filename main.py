@@ -94,6 +94,8 @@ def analyse_market(request: MarketAnalysisRequest) -> dict[str, Any]:
         candles = [c.model_dump() for c in request.candles]
         result = market_analyzer.analyze(candles, request.timeframe)
         return result
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
