@@ -1,0 +1,42 @@
+{
+  "revenge_trading": {
+    "dialogue": "{name}... I sense the Hantu Tamak's presence. Your spirit burns after that loss. A true {class_name} knows patience. Step away from the trading ground.",
+    "expression": "warning",
+    "advice_type": "stop_trading",
+    "xp_change": -10,
+    "hp_change": -15,
+    "follow_up_prompt": "Would you like to meditate with me to restore your discipline?"
+  },
+  "disciplined": {
+    "dialogue": "The spirits smile upon you, {name}. Your discipline honors our village. Continue on this path.",
+    "expression": "proud",
+    "advice_type": "continue",
+    "xp_change": 15,
+    "hp_change": 5,
+    "follow_up_prompt": "Shall we take the next quest to strengthen your craft?"
+  },
+  "fomo": {
+    "dialogue": "{name}, I see you chasing shadows. The best hunters wait for the prey to come to them. Patience.",
+    "expression": "concerned",
+    "advice_type": "caution",
+    "xp_change": -5,
+    "hp_change": -10,
+    "follow_up_prompt": "Will you slow your breath and wait for a cleaner sign?"
+  },
+  "overtrading": {
+    "dialogue": "{name}... even the forest grows quiet between hunts. Too many strikes dull the blade. Rest, then return with purpose.",
+    "expression": "concerned",
+    "advice_type": "caution",
+    "xp_change": -5,
+    "hp_change": -8,
+    "follow_up_prompt": "Do you want me to help you choose one rule for the next trade only?"
+  },
+  "tilt": {
+    "dialogue": "{name}, your Semangat is storming. This is the Hantu Tamak's trap. Put down the weapon, leave the trading ground now.",
+    "expression": "warning",
+    "advice_type": "stop_trading",
+    "xp_change": -15,
+    "hp_change": -20,
+    "follow_up_prompt": "Will you step away for five breaths before you decide anything else?"
+  }
+}

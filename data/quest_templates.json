@@ -1,0 +1,31 @@
+{
+  "pattern_recognition": {
+    "higher_highs": {
+      "title": "The Rising Smoke Signals",
+      "narrative": "Smoke rises from the trading post, each signal higher than the last. What do the spirits tell you?",
+      "correct": "A strong caravan is forming - the trend will continue upward",
+      "wrongs": [
+        "These are just scouts - the real move is downward",
+        "The spirits are unclear - I should wait"
+      ]
+    },
+    "lower_lows": {
+      "title": "Footprints Into the Swamp",
+      "narrative": "Each step sinks deeper than the last. The path grows darker. What does it mean?",
+      "correct": "Weakness grows - the trend is likely to continue downward",
+      "wrongs": [
+        "Strength returns - I should buy now",
+        "Patterns are lies - ignore them"
+      ]
+    },
+    "consolidation": {
+      "title": "The Silent Clearing",
+      "narrative": "The jungle falls quiet. No tribe advances. What do you do?",
+      "correct": "Wait for a clear break - the village must not waste Semangat",
+      "wrongs": [
+        "Strike blindly - action is always best",
+        "Double size - force the spirits to obey"
+      ]
+    }
+  }
+}
