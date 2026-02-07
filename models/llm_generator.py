@@ -103,11 +103,15 @@ class LLMGenerator:
         context: str,
     ) -> dict[str, Any]:
         personality = CLASS_PERSONALITIES.get(trader_class, "")
+        market_bias = market_analysis.get("market_bias", market_analysis.get("trend", "unclear"))
+        setup_quality = market_analysis.get("setup_quality")
+        risk_flags = market_analysis.get("risk_flags")
+        rsi_value = market_analysis.get("rsi", market_analysis.get("indicators", {}).get("rsi", 50))
         prompt = f"""You are Tok Bomoh, an ancient village shaman who guides young traders through the spirit world. You speak with wisdom, using tribal metaphors about hunting, spirits, and village life.
 
 Trader: {trader_name} ({trader_class}; {personality}).
 Behaviour: {behaviour_state} (confidence {behaviour_confidence:.2f}).
-Market: trend {market_analysis.get('trend','unclear')}, signal {market_analysis.get('signal','hold')}, rsi {market_analysis.get('rsi', market_analysis.get('indicators',{}).get('rsi',50))}.
+Market: trend {market_analysis.get('trend','unclear')}, bias {market_bias}, setup_quality {setup_quality}, risk_flags {risk_flags}, rsi {rsi_value}.
 Context: {context}.
 
 Generate a short coaching message (2-3 sentences). Be warm but firm. Reference Hantu Tamak if risk is high.

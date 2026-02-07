@@ -148,13 +148,21 @@ class MarketAnalyzer:
             if p["name"] in {"lower_lows", "resistance_rejection", "breakdown"}:
                 score -= 0.05 * float(p.get("confidence", 0.6))
 
-        signal = "hold"
+        market_bias = "neutral"
         if score > 0.15:
-            signal = "buy"
+            market_bias = "bullish"
         elif score < -0.15:
-            signal = "sell"
+            market_bias = "bearish"
 
-        signal_confidence = float(np.clip(abs(score), 0.0, 1.0))
+        setup_quality = float(np.clip(abs(score), 0.0, 1.0))
+
+        risk_flags: list[str] = []
+        if volatility > 0.03:
+            risk_flags.append("high_volatility")
+        if rsi_sig in {"overbought", "oversold"}:
+            risk_flags.append(f"rsi_{rsi_sig}")
+        if trend == "neutral" or strength < 0.25:
+            risk_flags.append("range_market")
 
         reasoning_parts: list[str] = []
         reasoning_parts.append(f"{trend.capitalize()} trend")
@@ -182,7 +190,8 @@ class MarketAnalyzer:
             "trend_strength": float(round(strength, 2)),
             "patterns": patterns,
             "indicators": indicators,
-            "signal": signal,
-            "signal_confidence": float(round(signal_confidence, 2)),
+            "market_bias": market_bias,
+            "setup_quality": float(round(setup_quality, 2)),
+            "risk_flags": risk_flags,
             "reasoning": "; ".join(reasoning_parts),
         }
