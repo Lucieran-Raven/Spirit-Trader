@@ -301,13 +301,18 @@ Behaviour Analysis:
 Generate an educational post-mortem analysis. Be gentle but clear.
 Focus on what the trader can LEARN, not blame.
 
+IMPORTANT: Evaluate decision_quality based on:
+- "good" if behaviour was disciplined (proper process, regardless of outcome)
+- "bad" if behaviour shows revenge, fomo, tilt, greed, or overtrading
+
 Respond ONLY as JSON with keys:
 {{
   "market_conditions": str,
   "behaviour_mistake": str,
   "lesson_learned": str,
   "next_time_suggestion": str,
-  "tok_bomoh_wisdom": str
+  "tok_bomoh_wisdom": str,
+  "decision_quality": "good" | "bad"
 }}"""
 
         result = await self._call_openai(prompt, max_tokens=400)
@@ -376,11 +381,15 @@ Even the best hunters return empty-handed sometimes.
 Remember: one bad hunt does not make a bad hunter. But ignoring the lesson does.
 """
 
+        # Determine decision quality based on behaviour state
+        decision_quality = "good" if behaviour_state in {"disciplined", "fear"} else "bad"
+
         return {
             "market_conditions": market_conditions,
             "behaviour_mistake": behaviour_mistake,
             "lesson_learned": lesson_learned,
             "next_time_suggestion": next_time_suggestion,
             "tok_bomoh_wisdom": tok_bomoh_wisdom,
+            "decision_quality": decision_quality,
         }
 
