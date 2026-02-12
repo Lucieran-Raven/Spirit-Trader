@@ -190,8 +190,8 @@ def progress_report(request: ProgressReportRequest) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/explain-loss")
-async def explain_loss(request: ExplainLossRequest) -> dict[str, Any]:
+@app.post("/explain-trade")
+async def explain_trade(request: ExplainLossRequest) -> dict[str, Any]:
     try:
         # Analyze market conditions at time of loss
         candles = [c.model_dump() for c in request.trade.candles]
@@ -204,7 +204,7 @@ async def explain_loss(request: ExplainLossRequest) -> dict[str, Any]:
         )
 
         # Generate explanation
-        result = await llm_generator.generate_loss_explanation(
+        result = await llm_generator.generate_trade_explanation(
             trade={
                 "action": request.trade.action,
                 "size": request.trade.size,
@@ -242,11 +242,13 @@ def _calculate_progress_metrics(
     # Calculate feature metrics
     features = _extract_progress_features(decisions)
 
-    # Discipline score (0-100): inverse of risk behaviors
-    discipline_score = 100
-    discipline_score -= min(40, features["revenge_frequency"] * 20)
-    discipline_score -= min(30, features["fomo_frequency"] * 15)
-    discipline_score -= min(30, features["overtrade_frequency"] * 10)
+    # Calculate penalties
+    revenge_penalty = min(40, features["revenge_frequency"] * 20)
+    fomo_penalty = min(30, features["fomo_frequency"] * 15)
+    overtrade_penalty = min(30, features["overtrade_frequency"] * 10)
+
+    # Discipline score (0-100): starts at 100, subtract penalties
+    discipline_score = 100 - revenge_penalty - fomo_penalty - overtrade_penalty
     discipline_score = max(0, min(100, discipline_score))
 
     # Risk scores (0-100): how often each bad habit appears
@@ -286,6 +288,12 @@ def _calculate_progress_metrics(
         "improvement_trend": improvement_trend,
         "strongest_bad_habit": strongest_bad_habit,
         "strongest_good_habit": strongest_good_habit,
+        "score_breakdown": {
+            "revenge_penalty": -revenge_penalty,
+            "fomo_penalty": -fomo_penalty,
+            "overtrade_penalty": -overtrade_penalty,
+        },
+        "history": _calculate_history_scores(session_history, decisions),
     }
 
 
@@ -360,6 +368,38 @@ def _extract_progress_features(decisions: list[dict[str, Any]]) -> dict[str, Any
         "patient_entries_score": patient_entries,
         "accepting_losses_score": accepting_losses,
     }
+
+
+def _calculate_history_scores(
+    session_history: list[dict[str, Any]], current_decisions: list[dict[str, Any]]
+) -> list[int]:
+    """Calculate discipline scores for time-series visualization.
+    
+    Returns array of scores: [previous_session_1, previous_session_2, ..., current]
+    """
+    history: list[int] = []
+    
+    # Calculate scores for each historical session
+    for session in session_history[-2:]:  # Last 2 sessions max
+        if isinstance(session, dict) and "decisions" in session:
+            session_decisions = session["decisions"]
+            if isinstance(session_decisions, list) and len(session_decisions) > 0:
+                features = _extract_progress_features(session_decisions)
+                score = 100
+                score -= min(40, features["revenge_frequency"] * 20)
+                score -= min(30, features["fomo_frequency"] * 15)
+                score -= min(30, features["overtrade_frequency"] * 10)
+                history.append(max(0, min(100, round(score))))
+    
+    # Calculate current session score
+    current_features = _extract_progress_features(current_decisions)
+    current_score = 100
+    current_score -= min(40, current_features["revenge_frequency"] * 20)
+    current_score -= min(30, current_features["fomo_frequency"] * 15)
+    current_score -= min(30, current_features["overtrade_frequency"] * 10)
+    history.append(max(0, min(100, round(current_score))))
+    
+    return history
 
 
 def _calculate_improvement_trend(

@@ -260,7 +260,7 @@ Respond ONLY as JSON with keys: title, share_text, short_text, stats_display (li
             "stats_display": stats_display,
         }
 
-    async def generate_loss_explanation(
+    async def generate_trade_explanation(
         self,
         trade: dict[str, Any],
         market_analysis: dict[str, Any],
@@ -268,7 +268,7 @@ Respond ONLY as JSON with keys: title, share_text, short_text, stats_display (li
         trader_class: str,
         trader_name: str,
     ) -> dict[str, Any]:
-        """Generate educational explanation for a losing trade."""
+        """Generate educational explanation for a trade (win or loss)."""
         personality = CLASS_PERSONALITIES.get(trader_class, "")
         market_bias = market_analysis.get("market_bias", market_analysis.get("trend", "unclear"))
         trend = market_analysis.get("trend", "neutral")
@@ -315,18 +315,18 @@ Respond ONLY as JSON with keys:
             return result
 
         # Template fallback
-        return self._template_loss_explanation(
+        return self._template_trade_explanation(
             trade, market_analysis, behaviour_analysis, trader_name
         )
 
-    def _template_loss_explanation(
+    def _template_trade_explanation(
         self,
         trade: dict[str, Any],
         market_analysis: dict[str, Any],
         behaviour_analysis: dict[str, Any],
         trader_name: str,
     ) -> dict[str, Any]:
-        """Fallback template for loss explanation when LLM fails."""
+        """Fallback template for trade explanation when LLM fails."""
         trend = market_analysis.get("trend", "neutral")
         patterns = market_analysis.get("patterns", [])
         behaviour_state = behaviour_analysis.get("primary_state", "unknown")
