@@ -1,4 +1,4 @@
-from __future__ import annotations
+    from __future__ import annotations
 
 import asyncio
 import json
@@ -259,3 +259,128 @@ Respond ONLY as JSON with keys: title, share_text, short_text, stats_display (li
             "short_text": "I unlocked an achievement in Trade Quest!",
             "stats_display": stats_display,
         }
+
+    async def generate_loss_explanation(
+        self,
+        trade: dict[str, Any],
+        market_analysis: dict[str, Any],
+        behaviour_analysis: dict[str, Any],
+        trader_class: str,
+        trader_name: str,
+    ) -> dict[str, Any]:
+        """Generate educational explanation for a losing trade."""
+        personality = CLASS_PERSONALITIES.get(trader_class, "")
+        market_bias = market_analysis.get("market_bias", market_analysis.get("trend", "unclear"))
+        trend = market_analysis.get("trend", "neutral")
+        patterns = market_analysis.get("patterns", [])
+        behaviour_state = behaviour_analysis.get("primary_state", "unknown")
+        risk_level = behaviour_analysis.get("risk_level", "low")
+        reasoning = behaviour_analysis.get("reasoning", "")
+
+        prompt = f"""You are Tok Bomoh, an ancient village shaman explaining a trading loss to a student.
+Speak with wisdom, using tribal metaphors about hunting, spirits, and village life.
+
+Trader: {trader_name} ({trader_class}; {personality}).
+
+Trade Details:
+- Action: {trade.get('action')}
+- Symbol: {trade.get('symbol')}
+- Size: {trade.get('size')}
+- PnL: {trade.get('pnl')}
+
+Market Conditions at Trade:
+- Trend: {trend}
+- Market Bias: {market_bias}
+- Patterns: {', '.join(p.get('name') for p in patterns[:3]) if patterns else 'none'}
+
+Behaviour Analysis:
+- State: {behaviour_state}
+- Risk Level: {risk_level}
+- Reasoning: {reasoning}
+
+Generate an educational post-mortem analysis. Be gentle but clear.
+Focus on what the trader can LEARN, not blame.
+
+Respond ONLY as JSON with keys:
+{{
+  "market_conditions": str,
+  "behaviour_mistake": str,
+  "lesson_learned": str,
+  "next_time_suggestion": str,
+  "tok_bomoh_wisdom": str
+}}"""
+
+        result = await self._call_openai(prompt, max_tokens=400)
+        if result and all(k in result for k in ["market_conditions", "lesson_learned"]):
+            return result
+
+        # Template fallback
+        return self._template_loss_explanation(
+            trade, market_analysis, behaviour_analysis, trader_name
+        )
+
+    def _template_loss_explanation(
+        self,
+        trade: dict[str, Any],
+        market_analysis: dict[str, Any],
+        behaviour_analysis: dict[str, Any],
+        trader_name: str,
+    ) -> dict[str, Any]:
+        """Fallback template for loss explanation when LLM fails."""
+        trend = market_analysis.get("trend", "neutral")
+        patterns = market_analysis.get("patterns", [])
+        behaviour_state = behaviour_analysis.get("primary_state", "unknown")
+        risk_level = behaviour_analysis.get("risk_level", "low")
+
+        market_conditions = f"The market showed {trend} conditions."
+        if patterns:
+            pattern_names = [p.get("name") for p in patterns[:2]]
+            market_conditions += f" Patterns present: {', '.join(pattern_names)}."
+
+        behaviour_mistake = {
+            "revenge_trading": "Trading larger size after a previous loss to 'make it back'.",
+            "fomo": "Entering too quickly, fearing to miss out on a move.",
+            "overtrading": "Too many trades in quick succession, fatigue setting in.",
+            "tilt": "Emotional trading after a losing streak, decisions clouded.",
+            "greed": "Position too large for the setup quality.",
+            "fear": "Exiting too early or hesitating on good setups.",
+            "disciplined": "Even disciplined hunters miss sometimes. The setup was valid.",
+        }.get(behaviour_state, "Standard loss within risk parameters.")
+
+        lesson_learned = {
+            "revenge_trading": "Losses are part of the hunt. Wait for the next proper signal.",
+            "fomo": "The jungle rewards patience. Wait for prey to come to you.",
+            "overtrading": "Rest between hunts. A tired hunter makes mistakes.",
+            "tilt": "Step away when Semangat (spirit) is stormy. Return when calm.",
+            "greed": "Size must match the prey. Don't hunt rabbits with elephant spears.",
+            "fear": "Trust your training. The spirits guide those who trust their path.",
+            "disciplined": "Good process, bad outcome. This happens to the best hunters.",
+        }.get(behaviour_state, "Every loss carries a lesson. Listen to it.")
+
+        next_time_suggestion = {
+            "revenge_trading": "Take 5 breaths after a loss before entering again.",
+            "fomo": "Set a timer. Wait 2 minutes before chasing any move.",
+            "overtrading": "Maximum 3 trades per session. Quality over quantity.",
+            "tilt": "Stop trading for the session. Return tomorrow.",
+            "greed": "Reduce size by half. Focus on technique, not catch size.",
+            "fear": "Review your plan before entering. Confidence comes from preparation.",
+            "disciplined": "Continue your disciplined approach. Results follow process.",
+        }.get(behaviour_state, "Reflect on this trade before your next hunt.")
+
+        tok_bomoh_wisdom = f"""{trader_name}, the spirits teach us through both victory and defeat.
+This loss is not a failure—it is tuition paid to the market.
+
+The {trend} winds were blowing, yet {'the signs were unclear' if risk_level == 'high' else 'you read them well'}.
+Even the best hunters return empty-handed sometimes.
+
+Remember: one bad hunt does not make a bad hunter. But ignoring the lesson does.
+"""
+
+        return {
+            "market_conditions": market_conditions,
+            "behaviour_mistake": behaviour_mistake,
+            "lesson_learned": lesson_learned,
+            "next_time_suggestion": next_time_suggestion,
+            "tok_bomoh_wisdom": tok_bomoh_wisdom,
+        }
+

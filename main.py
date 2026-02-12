@@ -83,6 +83,31 @@ class ShareRequest(BaseModel):
     stats: Dict[str, Any]
 
 
+class ProgressReportRequest(BaseModel):
+    decisions: List[Decision]
+    trader_class: str = "pemburu"
+    session_history: Optional[List[Dict[str, Any]]] = None
+
+
+class LosingTrade(BaseModel):
+    action: str
+    size: float
+    timestamp: int
+    price: float
+    result: str = "loss"
+    pnl: float
+    symbol: str
+    candles: List[Candle]
+    timeframe: str = "1h"
+
+
+class ExplainLossRequest(BaseModel):
+    trade: LosingTrade
+    previous_decisions: List[Decision]
+    trader_class: str = "pemburu"
+    trader_name: str = "Trader"
+
+
 @app.get("/")
 def health_check() -> dict[str, str]:
     return {"status": "alive", "service": "Spirit Trader API"}
@@ -153,6 +178,223 @@ async def generate_share(request: ShareRequest) -> dict[str, Any]:
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/progress-report")
+def progress_report(request: ProgressReportRequest) -> dict[str, Any]:
+    try:
+        decisions = [d.model_dump() for d in request.decisions]
+        result = _calculate_progress_metrics(decisions, request.session_history or [])
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/explain-loss")
+async def explain_loss(request: ExplainLossRequest) -> dict[str, Any]:
+    try:
+        # Analyze market conditions at time of loss
+        candles = [c.model_dump() for c in request.trade.candles]
+        market_analysis = market_analyzer.analyze(candles, request.trade.timeframe)
+
+        # Analyze behaviour leading to the loss
+        decisions = [d.model_dump() for d in request.previous_decisions]
+        behaviour = behaviour_classifier.classify(
+            decisions, request.trader_class, request.trade.pnl
+        )
+
+        # Generate explanation
+        result = await llm_generator.generate_loss_explanation(
+            trade={
+                "action": request.trade.action,
+                "size": request.trade.size,
+                "price": request.trade.price,
+                "pnl": request.trade.pnl,
+                "symbol": request.trade.symbol,
+            },
+            market_analysis=market_analysis,
+            behaviour_analysis=behaviour,
+            trader_class=request.trader_class,
+            trader_name=request.trader_name,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _calculate_progress_metrics(
+    decisions: list[dict[str, Any]], session_history: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Calculate learning progress and mastery scores from trading history."""
+    if not decisions:
+        return {
+            "discipline_score": 50,
+            "revenge_risk_score": 0,
+            "fomo_risk_score": 0,
+            "overtrading_risk_score": 0,
+            "improvement_trend": "neutral",
+            "strongest_bad_habit": "none",
+            "strongest_good_habit": "none",
+        }
+
+    # Calculate feature metrics
+    features = _extract_progress_features(decisions)
+
+    # Discipline score (0-100): inverse of risk behaviors
+    discipline_score = 100
+    discipline_score -= min(40, features["revenge_frequency"] * 20)
+    discipline_score -= min(30, features["fomo_frequency"] * 15)
+    discipline_score -= min(30, features["overtrade_frequency"] * 10)
+    discipline_score = max(0, min(100, discipline_score))
+
+    # Risk scores (0-100): how often each bad habit appears
+    total_trades = features["total_trades"]
+    revenge_risk_score = min(100, int(features["revenge_frequency"] * 100 / max(1, total_trades)))
+    fomo_risk_score = min(100, int(features["fomo_frequency"] * 100 / max(1, total_trades)))
+    overtrading_risk_score = min(100, int(features["overtrade_frequency"] * 100 / max(1, total_trades)))
+
+    # Improvement trend
+    improvement_trend = _calculate_improvement_trend(decisions, session_history)
+
+    # Strongest habits
+    strongest_bad_habit = "none"
+    strongest_good_habit = "none"
+
+    risk_scores = {
+        "revenge_trading": revenge_risk_score,
+        "fomo": fomo_risk_score,
+        "overtrading": overtrading_risk_score,
+    }
+    if max(risk_scores.values()) > 0:
+        strongest_bad_habit = max(risk_scores, key=risk_scores.get)
+
+    good_habits = {
+        "consistent_sizing": features["consistent_sizing_score"],
+        "patient_entries": features["patient_entries_score"],
+        "accepting_losses": features["accepting_losses_score"],
+    }
+    if max(good_habits.values()) > 0:
+        strongest_good_habit = max(good_habits, key=good_habits.get)
+
+    return {
+        "discipline_score": round(discipline_score),
+        "revenge_risk_score": revenge_risk_score,
+        "fomo_risk_score": fomo_risk_score,
+        "overtrading_risk_score": overtrading_risk_score,
+        "improvement_trend": improvement_trend,
+        "strongest_bad_habit": strongest_bad_habit,
+        "strongest_good_habit": strongest_good_habit,
+    }
+
+
+def _extract_progress_features(decisions: list[dict[str, Any]]) -> dict[str, Any]:
+    """Extract behavioral features for progress tracking."""
+    if not decisions:
+        return {
+            "total_trades": 0,
+            "revenge_frequency": 0,
+            "fomo_frequency": 0,
+            "overtrade_frequency": 0,
+            "consistent_sizing_score": 0,
+            "patient_entries_score": 0,
+            "accepting_losses_score": 0,
+        }
+
+    total = len(decisions)
+    sizes = [float(d.get("size", 0)) for d in decisions]
+    results = [d.get("result") for d in decisions]
+    timestamps = [int(d.get("timestamp", 0)) for d in decisions]
+
+    # Count revenge trading (size increase after loss)
+    revenge_count = 0
+    for i in range(1, len(decisions)):
+        if results[i - 1] == "loss":
+            prev_size = sizes[i - 1] if sizes[i - 1] > 0 else 1.0
+            if sizes[i] / prev_size > 1.5:
+                revenge_count += 1
+
+    # Count FOMO (rapid entries after losses with same direction)
+    fomo_count = 0
+    for i in range(1, len(decisions)):
+        if results[i - 1] == "loss":
+            time_diff = timestamps[i] - timestamps[i - 1]
+            if time_diff < 300:  # Less than 5 minutes
+                fomo_count += 1
+
+    # Count overtrading (high frequency)
+    intervals = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
+    avg_interval = sum(intervals) / len(intervals) if intervals else 120
+    overtrade_count = sum(1 for iv in intervals if iv < 60)
+
+    # Consistent sizing (low variance in position sizes after wins)
+    wins = [sizes[i] for i in range(len(decisions)) if results[i] == "win"]
+    consistent_sizing = 50
+    if len(wins) > 1:
+        mean_size = sum(wins) / len(wins)
+        variance = sum((s - mean_size) ** 2 for s in wins) / len(wins)
+        cv = (variance ** 0.5) / mean_size if mean_size > 0 else 1
+        consistent_sizing = max(0, min(100, int(100 - cv * 50)))
+
+    # Patient entries (waiting after losses)
+    patient_entries = 50
+    if intervals:
+        patient_count = sum(1 for iv in intervals if iv > 120)
+        patient_entries = int(patient_count * 100 / len(intervals))
+
+    # Accepting losses (no re-entry after loss within 5 min)
+    loss_count = sum(1 for r in results if r == "loss")
+    chase_count = 0
+    for i in range(1, len(decisions)):
+        if results[i - 1] == "loss" and (timestamps[i] - timestamps[i - 1]) < 300:
+            chase_count += 1
+    accepting_losses = 100 - int(chase_count * 100 / max(1, loss_count)) if loss_count > 0 else 50
+
+    return {
+        "total_trades": total,
+        "revenge_frequency": revenge_count,
+        "fomo_frequency": fomo_count,
+        "overtrade_frequency": overtrade_count,
+        "consistent_sizing_score": consistent_sizing,
+        "patient_entries_score": patient_entries,
+        "accepting_losses_score": accepting_losses,
+    }
+
+
+def _calculate_improvement_trend(
+    decisions: list[dict[str, Any]], session_history: list[dict[str, Any]]
+) -> str:
+    """Determine if trader is improving based on session-to-session comparison."""
+    if not decisions or len(decisions) < 4:
+        return "neutral"
+
+    # Split into first half and second half
+    mid = len(decisions) // 2
+    first_half = decisions[:mid]
+    second_half = decisions[mid:]
+
+    # Calculate discipline proxy for each half
+    def calc_half_score(half: list[dict]) -> float:
+        results = [d.get("result") for d in half]
+        timestamps = [int(d.get("timestamp", 0)) for d in half]
+
+        win_rate = sum(1 for r in results if r == "win") / max(1, len(results))
+
+        intervals = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
+        patience = sum(1 for iv in intervals if iv > 60) / max(1, len(intervals))
+
+        return win_rate * 0.5 + patience * 0.5
+
+    first_score = calc_half_score(first_half)
+    second_score = calc_half_score(second_half)
+
+    diff = second_score - first_score
+    if diff > 0.15:
+        return "improving"
+    elif diff < -0.15:
+        return "declining"
+    return "stable"
 
 
 if __name__ == "__main__":
